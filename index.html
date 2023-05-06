@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Job Application Analysis</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        form {
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>Job Application Analysis</h1>
+    
+    <h2>Register</h2>
+    <form id="register-form">
+        <label for="register-username">Username:</label>
+        <input type="text" id="register-username" required>
+        <label for="register-password">Password:</label>
+        <input type="password" id="register-password" required>
+        <button type="submit">Register</button>
+    </form>
+
+    <h2>Login</h2>
+    <form id="login-form">
+        <label for="login-username">Username:</label>
+        <input type="text" id="login-username" required>
+        <label for="login-password">Password:</label>
+        <input type="password" id="login-password" required>
+        <button type="submit">Login</button>
+    </form>
+
+    <div id="user-actions" style="display: none;">
+        <h2>Upload Resume</h2>
+        <form id="upload-resume-form">
+            <label for="resume-data">Resume Data:</label>
+            <input type="file" id="resume-file" required>
+            <button type="submit">Upload Resume</button>
+        </form>
+
+        <h2>Upload Job Posting</h2>
+        <form id="upload-job-posting-form">
+            <label for="job-posting-data">Job Posting Data:</label>
+            <input type="file" id="job-posting-file" required>
+            <button type="submit">Upload Job Posting</button>
+        </form>
+        
+        <h2>Analyze Resume</h2>
+        <form id="analyze-resume-form">
+            <label for="resume-id">Resume ID:</label>
+            <input type="number" id="resume-id" required>
+            <label for="job-posting-id">Job Posting ID:</label>
+            <input type="number" id="job-posting-id" required>
+            <button type="submit">Analyze Resume</button>
+        </form>
+        
+        <h2>Analysis Result</h2>
+        <div id="analysis-result"></div>
+    </div>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        let authToken = '';
+
+		$('#register-form').submit(function(event) {
+			event.preventDefault();
+			const username = $('#register-username').val();
+			const password = $('#register-password').val();
+
+			$.post('http://127.0.0.1:5000/api/register', { username, password })
+				.done(function(data) {
+					alert('Registration successful');
+				})
+				.fail(function(jqXHR) {
+					alert('Registration failed: ' + jqXHR.responseJSON.error);
+				});
+		});
+
+        $('#login-form').submit(function(event) {
+            event.preventDefault();
+            const username = $('#login-username').val();
+            const password = $('#login-password').val();
+            authToken = btoa(`${username}:${password}`);
+
+            $.ajax({
+                url: 'http://127.0.0.1:5000/api/upload_resume',
+                type: 'POST',
+                headers: {
+                    'Authorization': `Basic ${authToken}`
+                },
+                data: { resume_data: 'test' }
+            }).done(function() {
+                $('#login-form').hide();
+                $('#user-actions').show();
+                alert('Login successful');
+            }).fail(function() {
+                alert('Login failed');
+            });
+        });
+
+        $('#upload-resume-form').submit(async function(event) {
+            event.preventDefault();
+            const resumeFile = document.getElementById('resume-file').files[0];
+
+            if (resumeFile.type !== 'application/pdf') {
+                alert('Please upload a PDF file');
+                return;
+            }
+
+            const resumeData = await pdfToText(resumeFile);
+
+            $.ajax({
+                url: 'http://127.0.0.1:5000/api/upload_resume',
+                type: 'POST',
+                headers: {
+                    'Authorization': `Basic ${authToken}`
+                },
+                data: { resume_data: resumeData }
+            }).done(function(data) {
+                alert(`Resume uploaded. Resume ID: ${data.resume_id}`);
+            }).fail(function() {
+                alert('Resume upload failed');
+            });
+        });
+
+        $('#upload-job-posting-form').submit(async function(event) {
+            event.preventDefault();
+            const jobPostingFile = document.getElementById('job-posting-file').files[0];
+
+            if (jobPostingFile.type !== 'application/pdf') {
+                alert('Please upload a PDF file');
+                return;
+            }
+
+            const jobPostingData = await pdfToText(jobPostingFile);
+
+            $.ajax({
+                url: 'http://127.0.0.1:5000/api/upload_job_posting',
+                type: 'POST',
+                headers: {
+                    'Authorization': `Basic ${authToken}`
+                },
+                data: { job_posting_data: jobPostingData }
+            }).done(function(data) {
+                alert(`Job posting uploaded. Job Posting ID: ${data.job_posting_id}`);
+            }).fail(function() {
+                alert('Job posting upload failed');
+            });
+        });
+
+        $('#analyze-resume-form').submit(function(event) {
+            event.preventDefault();
+            const resumeId = $('#resume-id').val();
+            const jobPostingId = $('#job-posting-id').val();
+
+            $.ajax({
+                url: `http://127.0.0.1:5000/api/analyze_resume/${resumeId}/${jobPostingId}`,
+                type: 'GET',
+                headers: {
+                    'Authorization': `Basic ${authToken}`
+                }
+            }).done(function(data) {
+                $('#analysis-result').text(data.analysis_result);
+            }).fail(function() {
+                alert('Analysis failed');
+            });
+        });
+		async function pdfToText(pdfFile) {
+            const pdf = await pdfjsLib.getDocument({ url: URL.createObjectURL(pdfFile) }).promise;
+            let textContent = '';
+
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                textContent += content.items.map(item => item.str).join(' ') + ' ';
+            }
+
+            return textContent;
+        }
+		$('#analyze-multiple-resumes-form').submit(function(event) {
+			event.preventDefault();
+			const resumeIds = $('#resume-ids').val();
+			const jobPostingId = $('#job-posting-id-multiple').val();
+
+			$.ajax({
+				url: `http://127.0.0.1:5000/api/analyze_multiple_resumes/${resumeIds}/${jobPostingId}`,
+				type: 'GET',
+				headers: {
+					'Authorization': `Basic ${authToken}`
+				}
+			}).done(function(data) {
+				$('#analysis-result').text(JSON.stringify(data.analyzed_resumes, null, 2));
+			}).fail(function() {
+				alert('Analysis failed');
+			});
+		});
+    </script>
+</body>
+</html>
