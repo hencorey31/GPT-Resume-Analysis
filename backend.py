@@ -11,7 +11,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 db = SQLAlchemy(app)
 auth = HTTPBasicAuth()
 
-openai.api_key = "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"
+openai.api_key = "Your API key here"
 
 # Database models
 class User(db.Model):
